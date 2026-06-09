@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -267,7 +269,7 @@
                     </div>
                     <div class="mt-4 p-4 bg-blue-50 text-blue-700 rounded-lg text-sm flex items-start">
                         <i class="fas fa-info-circle mt-0.5 mr-2"></i>
-                        <p>Format yang dicetak berupa tabel absen (*Landscape* A4) dengan kolom kosong untuk pengisian <b>Infaq</b> dan <b>Tanda Tangan</b> wali murid.</p>
+                        <p>Format yang dicetak berupa tabel absen (*Portrait* A4) dengan kolom: No, Nama Siswa, Total Tabungan, Ket. Ambil, <b>Infaq</b>, dan <b>Tanda Tangan</b>.</p>
                     </div>
                 </div>
             </div>
@@ -802,18 +804,17 @@
                 
                 let rowsHtml = '';
                 let waliKelas = students[0].waliKelasTahfizh || '............................'; 
+                let kelasSDInfo = students[0].kelasSD || '-';
                 
                 students.forEach((data, i) => {
                     rowsHtml += `
                         <tr>
-                            <td style="text-align: center;">${i+1}</td>
-                            <td style="font-weight: bold;">${data.nama}</td>
-                            <td style="text-align: center;">${data.kelasTahfizh || '-'}</td>
-                            <td>${data.waliKelasTahfizh || '-'}</td>
-                            <td style="text-align: right; font-weight: bold;">${formatRupiah(data.jumlahTotalNum)}</td>
-                            <td style="text-align: center;">${data.keteranganAmbil || '-'}</td>
-                            <td></td> <!-- Infaq Kosong -->
-                            <td></td> <!-- Tanda Tangan Kosong -->
+                            <td class="col-no">${i+1}</td>
+                            <td class="col-nama">${data.nama}</td>
+                            <td class="col-total">${formatRupiah(data.jumlahTotalNum)}</td>
+                            <td class="col-ket">${data.keteranganAmbil || '-'}</td>
+                            <td class="col-infaq"></td>
+                            <td class="col-ttd"></td>
                         </tr>
                     `;
                 });
@@ -823,19 +824,32 @@
                         <div class="kop">
                             <h2>ABSENSI PENGAMBILAN TABUNGAN SANTRI</h2>
                             <h4>YAYASAN HUDA WAN NURUL QUR'ANI</h4>
-                            <p style="margin:5px 0; font-weight:bold;">KELAS: ${kelas}</p>
+                            <div class="kop-info">
+                                <table class="info-table">
+                                    <tr>
+                                        <td><b>Kelas Tahfizh</b></td>
+                                        <td>: ${kelas}</td>
+                                        <td><b>Wali Kelas</b></td>
+                                        <td>: ${waliKelas}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>Jumlah Santri</b></td>
+                                        <td>: ${students.length} orang</td>
+                                        <td><b>Tanggal Cetak</b></td>
+                                        <td>: ${new Date().toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'})}</td>
+                                    </tr>
+                                </table>
+                            </div>
                         </div>
-                        <table>
+                        <table class="absen-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 3%;">No</th>
-                                    <th style="width: 20%;">Nama Siswa</th>
-                                    <th style="width: 10%;">Kelas Tahfizh</th>
-                                    <th style="width: 15%;">Wali Kelas Tahfizh</th>
-                                    <th style="width: 12%;">Jumlah Tabungan</th>
-                                    <th style="width: 12%;">Ket. Ambil</th>
-                                    <th style="width: 10%;">Infaq</th>
-                                    <th style="width: 18%;">Tanda Tangan</th>
+                                    <th class="col-no">No</th>
+                                    <th class="col-nama">Nama Siswa</th>
+                                    <th class="col-total">Total Tabungan</th>
+                                    <th class="col-ket">Ket. Ambil</th>
+                                    <th class="col-infaq">Infaq</th>
+                                    <th class="col-ttd">Tanda Tangan</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -879,48 +893,61 @@
                         .btn-print { position: fixed; top: 10px; right: 20px; padding: 10px 20px; background: #15803d; color: #fff; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; z-index: 1000; }
                         .btn-print:hover { background: #166534; }
                         
-                        /* Container per kelas untuk dicetak terpisah */
+                        /* Container per kelas - A4 Portrait */
                         .page-break {
                             background: white;
-                            padding: 20mm;
+                            padding: 15mm;
                             margin: 0 auto 20px auto;
-                            width: 297mm; /* Lebar Kertas A4 Landscape */
-                            min-height: 210mm;
+                            width: 210mm;
+                            min-height: 297mm;
                             box-shadow: 0 0 10px rgba(0,0,0,0.5);
-                            page-break-after: always; /* Paksa pisah halaman */
+                            page-break-after: always;
                         }
 
-                        .kop { text-align: center; margin-bottom: 20px; }
-                        .kop h2 { margin: 0; color: #15803d; }
-                        .kop h4 { margin: 5px 0; color: #555; }
+                        .kop { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #15803d; padding-bottom: 10px; }
+                        .kop h2 { margin: 0; color: #15803d; font-size: 18px; }
+                        .kop h4 { margin: 3px 0 10px 0; color: #555; font-size: 13px; }
+                        .kop-info { margin-top: 10px; }
+                        .info-table { width: 100%; font-size: 12px; text-align: left; border: none; }
+                        .info-table td { border: none; padding: 3px 5px; }
+                        .info-table td:nth-child(1), .info-table td:nth-child(3) { width: 18%; }
+                        .info-table td:nth-child(2) { width: 32%; }
+
+                        .absen-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 5px; }
+                        .absen-table th, .absen-table td { border: 1px solid #000; padding: 6px 6px; vertical-align: middle; }
+                        .absen-table th { background: #eab308; color: #15803d; text-transform: uppercase; text-align: center; font-size: 11px; }
                         
-                        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-                        th, td { border: 1px solid #000; padding: 6px 8px; vertical-align: middle; }
-                        th { background: #eab308; color: #15803d; text-transform: uppercase; }
+                        .col-no { width: 6%; text-align: center; }
+                        .col-nama { width: 30%; font-weight: 600; }
+                        .col-total { width: 17%; text-align: right; font-weight: bold; }
+                        .col-ket { width: 13%; text-align: center; }
+                        .col-infaq { width: 12%; }
+                        .col-ttd { width: 22%; }
                         
-                        /* Khusus untuk area tanda tangan */
                         .signature-section { page-break-inside: avoid; }
                         .signature-section table, .signature-section th, .signature-section td { border: none !important; }
                         .signature-section td { padding: 0; }
-                        .signature-section p { margin: 5px 0; font-size: 13px; }
+                        .signature-section p { margin: 4px 0; font-size: 12px; }
 
                         @media print {
-                            @page { size: A4 landscape; margin: 0; }
+                            @page { size: A4 portrait; margin: 0; }
                             body { background: white; padding: 0; }
                             .btn-print { display: none; }
                             .page-break { 
                                 margin: 0; 
-                                padding: 15mm; 
+                                padding: 12mm; 
                                 box-shadow: none; 
                                 width: 100%; 
-                                height: auto;
+                                min-height: auto;
                                 page-break-after: always; 
                             }
+                            thead { display: table-header-group; }
+                            tr { page-break-inside: avoid; }
                         }
                     </style>
                 </head>
                 <body>
-                    <button class="btn-print" onclick="window.print()">Cetak (Landscape)</button>
+                    <button class="btn-print" onclick="window.print()">Cetak (Portrait)</button>
                     ${pagesHtml}
                     <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 500); }<\/script>
                 </body>
