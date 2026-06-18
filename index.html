@@ -28,15 +28,26 @@
             if (selected.length === 0) { alert('Centang minimal 1 kelas.'); return; }
             const data = globalData.filter(item => selected.includes(item.kelasTahfizh) || selected.includes(item.kelasSD));
             if (data.length === 0) { alert('Data kosong.'); return; }
+            const sortBy = (document.getElementById('sortKeseluruhan')||{}).value || 'tabungan-desc';
             const sorted = [...data].sort((a,b) => {
-                const ka = (a.kelasSD || a.kelasTahfizh || '');
-                const kb = (b.kelasSD || b.kelasTahfizh || '');
-                return ka.localeCompare(kb) || a.nama.localeCompare(b.nama);
+                switch (sortBy) {
+                    case 'tabungan-desc': return b.jumlahTotalNum - a.jumlahTotalNum;
+                    case 'tabungan-asc':  return a.jumlahTotalNum - b.jumlahTotalNum;
+                    case 'nama':          return a.nama.localeCompare(b.nama);
+                    case 'potongan-desc': return b.potonganNum - a.potonganNum;
+                    case 'penyerahan-desc': return b.danaDiserahkanNum - a.danaDiserahkanNum;
+                    case 'kelas':
+                    default: {
+                        const ka = (a.kelasSD || a.kelasTahfizh || '');
+                        const kb = (b.kelasSD || b.kelasTahfizh || '');
+                        return ka.localeCompare(kb) || a.nama.localeCompare(b.nama);
+                    }
+                }
             });
             let totalTab = 0, totalPot = 0, totalSerah = 0;
-            let countAmbil = 0, countTidakAmbil = 0;
-            let totalSerahAmbil = 0, totalTidakAmbilUang = 0;
-            const groupKet = {}; // { label: { count, totalSerah, isTidak } }
+            let countAmbil = 0, countDitahan = 0;
+            let totalSerahAmbil = 0, totalDitahanUang = 0;
+            const groupKet = {}; // { label: { count, totalSerah, isAmbil } }
             let rows = '';
             sorted.forEach((it, i) => {
                 totalTab += it.jumlahTotalNum;
@@ -45,15 +56,16 @@
                 const ketRawOrig = (it.keteranganAmbil || '').toString().trim();
                 const ketLabel = ketRawOrig === '' ? 'Belum Diisi' : ketRawOrig;
                 const ketLow = ketLabel.toLowerCase();
-                const isTidak = ketLow.includes('tidak');
-                const isAmbil = !isTidak && ketLow !== 'belum diisi';
+                // HANYA "Ambil" (persis) yang diserahkan ke orang tua.
+                // Bulan 7 / Bulan 8 / Bulan 9 / Tidak Ambil / Belum Diisi = DITAHAN.
+                const isAmbil = (ketLow === 'ambil');
                 if (isAmbil) { countAmbil++; totalSerahAmbil += it.danaDiserahkanNum; }
-                else if (isTidak) { countTidakAmbil++; totalTidakAmbilUang += it.danaDiserahkanNum; }
-                if (!groupKet[ketLabel]) groupKet[ketLabel] = { count: 0, totalSerah: 0, isTidak };
+                else         { countDitahan++; totalDitahanUang += it.danaDiserahkanNum; }
+                if (!groupKet[ketLabel]) groupKet[ketLabel] = { count: 0, totalSerah: 0, isAmbil };
                 groupKet[ketLabel].count++;
                 groupKet[ketLabel].totalSerah += it.danaDiserahkanNum;
-                const ketColor = isTidak ? '#b91c1c' : (isAmbil ? '#15803d' : '#64748b');
-                const ketBg = isTidak ? '#fee2e2' : (isAmbil ? '#dcfce7' : '#f1f5f9');
+                const ketColor = isAmbil ? '#15803d' : '#b91c1c';
+                const ketBg    = isAmbil ? '#dcfce7' : '#fee2e2';
                 rows += `<tr>
                     <td style="text-align:center;">${i+1}</td>
                     <td style="font-weight:600;">${it.nama}</td>
@@ -64,16 +76,18 @@
                     <td style="text-align:center;font-weight:bold;color:${ketColor};background:${ketBg};">${ketLabel}</td>
                 </tr>`;
             });
-            // Build per-keterangan rekap rows (sorted: AMBIL variants first, TIDAK AMBIL last)
+            // Rincian per-keterangan: AMBIL dulu, lainnya setelahnya
             const ketEntries = Object.entries(groupKet).sort((a,b) => {
-                if (a[1].isTidak !== b[1].isTidak) return a[1].isTidak ? 1 : -1;
+                if (a[1].isAmbil !== b[1].isAmbil) return a[1].isAmbil ? -1 : 1;
                 return a[0].localeCompare(b[0]);
             });
             let ketRekapRows = '';
             ketEntries.forEach(([label, g]) => {
-                const c = g.isTidak ? '#b91c1c' : '#15803d';
-                ketRekapRows += `<div class="rekap-row"><span>Keterangan <b style="color:${c};">${label}</b> <small style="color:#64748b;">(${g.count} santri)</small></span><span style="color:${c};"><b>${formatRupiah(g.totalSerah)}</b></span></div>`;
+                const c = g.isAmbil ? '#15803d' : '#b91c1c';
+                const tag = g.isAmbil ? 'DISERAHKAN' : 'DITAHAN';
+                ketRekapRows += `<div class="rekap-row"><span><b style="color:${c};">${label}</b> <small style="color:#64748b;">(${g.count} santri • ${tag})</small></span><span style="color:${c};"><b>${formatRupiah(g.totalSerah)}</b></span></div>`;
             });
+
             const tgl = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
             const kelasLabel = selected.join(', ');
             const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rekapitulasi Keseluruhan Tabungan Santri</title>
@@ -124,7 +138,7 @@
                         <td style="text-align:right;">${formatRupiah(totalTab)}</td>
                         <td style="text-align:right;color:#b91c1c;">${formatRupiah(totalPot)}</td>
                         <td style="text-align:right;">${formatRupiah(totalSerah)}</td>
-                        <td style="text-align:center;">Ambil: ${countAmbil} / Tidak: ${countTidakAmbil}</td>
+                        <td style="text-align:center;">Ambil: ${countAmbil} / Ditahan: ${countDitahan}</td>
                     </tr></tfoot>
                 </table>
                     <div class="rekap">
@@ -135,8 +149,9 @@
                         <div class="rekap-row"><span>Total Penyerahan (Semua)</span><span><b>${formatRupiah(totalSerah)}</b></span></div>
                         <h3 style="margin-top:12px;"><i>Rincian per Keterangan (Jumlah Uang)</i></h3>
                         ${ketRekapRows}
-                        <div class="rekap-row" style="background:#fee2e2;padding:8px;border-radius:4px;margin-top:6px;"><span><b style="color:#b91c1c;">TOTAL DANA SISWA TIDAK AMBIL</b><br><small style="font-weight:normal;color:#64748b;">(${countTidakAmbil} santri — uang tetap ditahan)</small></span><span style="color:#b91c1c;font-size:16px;"><b>${formatRupiah(totalTidakAmbilUang)}</b></span></div>
-                        <div class="rekap-row" style="background:#fef9c3;padding:10px;border-radius:4px;margin-top:6px;border:2px solid #15803d;"><span><b style="color:#15803d;">DANA YANG DISIAPKAN UNTUK DIKEMBALIKAN KE ORANG TUA</b><br><small style="font-weight:normal;color:#64748b;">(Total penyerahan santri dengan keterangan AMBIL — ${countAmbil} santri)</small></span><span style="color:#15803d;font-size:18px;"><b>${formatRupiah(totalSerahAmbil)}</b></span></div>
+                        <div class="rekap-row" style="background:#fee2e2;padding:8px;border-radius:4px;margin-top:6px;"><span><b style="color:#b91c1c;">TOTAL DANA DITAHAN (Bulan 7/8/9, Tidak Ambil, dll)</b><br><small style="font-weight:normal;color:#64748b;">(${countDitahan} santri — uang TIDAK diserahkan ke orang tua)</small></span><span style="color:#b91c1c;font-size:16px;"><b>${formatRupiah(totalDitahanUang)}</b></span></div>
+                        <div class="rekap-row" style="background:#fef9c3;padding:10px;border-radius:4px;margin-top:6px;border:2px solid #15803d;"><span><b style="color:#15803d;">DANA YANG DISIAPKAN UNTUK DIKEMBALIKAN KE ORANG TUA</b><br><small style="font-weight:normal;color:#64748b;">(Hanya keterangan <b>AMBIL</b> — ${countAmbil} santri. Total tabungan setelah dipotong potongan & dipotong dana yang ditahan.)</small></span><span style="color:#15803d;font-size:18px;"><b>${formatRupiah(totalSerahAmbil)}</b></span></div>
+
                     </div>
                 </div>
                 <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
@@ -266,14 +281,27 @@
                     </button>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div class="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Filter Kelas (Centang)</label>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="toggleAllKelas('Cetak', true); applyPrintFilters();" class="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded font-semibold">Pilih Semua</button>
+                            <button type="button" onclick="toggleAllKelas('Cetak', false); applyPrintFilters();" class="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded font-semibold">Kosongkan</button>
+                        </div>
+                    </div>
+                    <div id="kelasCheckboxCetak" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 p-3 border border-slate-200 rounded-lg bg-white max-h-44 overflow-y-auto"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Filter Kelas</label>
-                        <select id="filterKelasCetak" onchange="applyPrintFilters()" class="w-full p-3 rounded-lg border border-slate-300 focus:border-bank-green focus:outline-none bg-white">
-                            <option value="ALL">Semua Kelas</option>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Urutkan</label>
+                        <select id="sortCetak" onchange="applyPrintFilters()" class="w-full p-3 rounded-lg border border-slate-300 focus:border-bank-green focus:outline-none bg-white">
+                            <option value="tabungan-desc">Tabungan Terbanyak (Rangking 1)</option>
+                            <option value="tabungan-asc">Tabungan Tersedikit</option>
+                            <option value="nama">Nama (A-Z)</option>
+                            <option value="kelas">Kelas (A-Z)</option>
                         </select>
                     </div>
-                    <div class="md:col-span-2">
+                    <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cari Nama</label>
                         <div class="relative">
                             <i class="fas fa-search absolute left-3 top-3.5 text-slate-400"></i>
@@ -281,6 +309,7 @@
                         </div>
                     </div>
                 </div>
+
 
                 <div class="border border-slate-200 rounded-xl overflow-hidden bg-white flex flex-col">
                     <div class="bg-slate-100 px-4 py-3 border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
@@ -448,6 +477,17 @@
                         </div>
                     </div>
                     <div id="kelasCheckboxKeseluruhan" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3 border border-slate-200 rounded-lg bg-slate-50 max-h-72 overflow-y-auto mb-4"></div>
+                    <div class="mb-4">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Urutkan Berdasarkan</label>
+                        <select id="sortKeseluruhan" class="w-full p-3 rounded-lg border border-slate-300 focus:border-bank-green focus:outline-none bg-white">
+                            <option value="tabungan-desc">Tabungan Terbanyak (Rangking 1)</option>
+                            <option value="tabungan-asc">Tabungan Tersedikit</option>
+                            <option value="penyerahan-desc">Total Penyerahan Terbesar</option>
+                            <option value="potongan-desc">Potongan Terbesar</option>
+                            <option value="kelas">Kelas (A-Z)</option>
+                            <option value="nama">Nama (A-Z)</option>
+                        </select>
+                    </div>
                     <button onclick="printKeseluruhan()" class="w-full bg-bank-green hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow transition-all flex items-center justify-center">
                         <i class="fas fa-print mr-2"></i> Cetak Tabungan Keseluruhan
                     </button>
@@ -763,18 +803,18 @@
         }
 
         function populateKelasFilters() {
-            const selectCetak = document.getElementById('filterKelasCetak');
+            const boxCetak = document.getElementById('kelasCheckboxCetak');
             const boxAbsen = document.getElementById('kelasCheckboxAbsen');
             const boxKes = document.getElementById('kelasCheckboxKeseluruhan');
             let sortedKelas = Array.from(listKelas).sort();
             sortedKelas.forEach(kelas => {
-                let opt1 = document.createElement('option'); opt1.value = kelas; opt1.textContent = kelas;
-                selectCetak.appendChild(opt1);
                 const safe = kelas.replace(/"/g,'&quot;');
+                if (boxCetak) boxCetak.insertAdjacentHTML('beforeend', `<label class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1.5 cursor-pointer hover:bg-green-50 text-sm"><input type="checkbox" class="kelas-cb-Cetak w-4 h-4 text-bank-green" value="${safe}" onchange="applyPrintFilters()" checked><span class="truncate">${safe}</span></label>`);
                 boxAbsen.insertAdjacentHTML('beforeend', `<label class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1.5 cursor-pointer hover:bg-green-50 text-sm"><input type="checkbox" class="kelas-cb-Absen w-4 h-4 text-bank-green" value="${safe}"><span class="truncate">${safe}</span></label>`);
                 boxKes.insertAdjacentHTML('beforeend', `<label class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1.5 cursor-pointer hover:bg-green-50 text-sm"><input type="checkbox" class="kelas-cb-Keseluruhan w-4 h-4 text-bank-green" value="${safe}"><span class="truncate">${safe}</span></label>`);
             });
         }
+
 
         function toggleAllKelas(scope, val) {
             document.querySelectorAll('.kelas-cb-' + scope).forEach(cb => cb.checked = val);
@@ -925,17 +965,33 @@
 
         // --- FILTER & CETAK BUKTI ---
         function applyPrintFilters() {
-            const filterKelas = document.getElementById('filterKelasCetak').value;
-            const filterNama = document.getElementById('filterNama').value.toLowerCase().trim();
-            
+            const checkedKelas = getCheckedKelas('Cetak');
+            const allBoxes = document.querySelectorAll('.kelas-cb-Cetak');
+            const useAll = (allBoxes.length === 0); // before populate -> show all
+            const filterNama = (document.getElementById('filterNama')?.value || '').toLowerCase().trim();
+            const sortBy = (document.getElementById('sortCetak')?.value) || 'tabungan-desc';
+
             printFilteredData = globalData.filter(item => {
-                let matchKelas = true;
-                if (filterKelas !== 'ALL') matchKelas = (item.kelasTahfizh === filterKelas || item.kelasSD === filterKelas);
-                let matchNama = item.nama.toLowerCase().includes(filterNama);
+                const matchKelas = useAll || checkedKelas.includes(item.kelasTahfizh) || checkedKelas.includes(item.kelasSD);
+                const matchNama = item.nama.toLowerCase().includes(filterNama);
                 return matchKelas && matchNama;
+            });
+            printFilteredData.sort((a,b) => {
+                switch (sortBy) {
+                    case 'tabungan-desc': return b.jumlahTotalNum - a.jumlahTotalNum;
+                    case 'tabungan-asc':  return a.jumlahTotalNum - b.jumlahTotalNum;
+                    case 'nama':          return a.nama.localeCompare(b.nama);
+                    case 'kelas': {
+                        const ka = (a.kelasSD || a.kelasTahfizh || '');
+                        const kb = (b.kelasSD || b.kelasTahfizh || '');
+                        return ka.localeCompare(kb) || (b.jumlahTotalNum - a.jumlahTotalNum);
+                    }
+                    default: return b.jumlahTotalNum - a.jumlahTotalNum;
+                }
             });
             renderPrintList();
         }
+
 
         function renderPrintList() {
             const container = document.getElementById('printListContainer');
@@ -988,7 +1044,9 @@
 
             const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
             // Array filter preserve order. Since globalData is sorted, dataToPrint is also sorted by Highest Savings
-            const dataToPrint = globalData.filter(item => selectedIds.includes(item.id));
+            // Preserve order from the filtered/sorted list (e.g. rangking 1 first)
+            const orderSource = (printFilteredData && printFilteredData.length) ? printFilteredData : globalData;
+            const dataToPrint = orderSource.filter(item => selectedIds.includes(item.id));
 
             let pagesHtml = '';
             for (let i = 0; i < dataToPrint.length; i += 3) {
