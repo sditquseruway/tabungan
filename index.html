@@ -35,24 +35,25 @@
             });
             let totalTab = 0, totalPot = 0, totalSerah = 0;
             let countAmbil = 0, countTidakAmbil = 0;
-            let totalSerahAmbil = 0;
+            let totalSerahAmbil = 0, totalTidakAmbilUang = 0;
+            const groupKet = {}; // { label: { count, totalSerah, isTidak } }
             let rows = '';
             sorted.forEach((it, i) => {
                 totalTab += it.jumlahTotalNum;
                 totalPot += it.potonganNum;
                 totalSerah += it.danaDiserahkanNum;
-                const ketRaw = (it.keteranganAmbil || '').toLowerCase();
-                let ketLabel = 'Tidak Ambil';
-                let isAmbil = false;
-                if (ketRaw.includes('tidak')) {
-                    ketLabel = 'Tidak Ambil';
-                } else if (/ambil/.test(ketRaw)) {
-                    ketLabel = 'Ambil';
-                    isAmbil = true;
-                }
+                const ketRawOrig = (it.keteranganAmbil || '').toString().trim();
+                const ketLabel = ketRawOrig === '' ? 'Belum Diisi' : ketRawOrig;
+                const ketLow = ketLabel.toLowerCase();
+                const isTidak = ketLow.includes('tidak');
+                const isAmbil = !isTidak && ketLow !== 'belum diisi';
                 if (isAmbil) { countAmbil++; totalSerahAmbil += it.danaDiserahkanNum; }
-                else { countTidakAmbil++; }
-                const ketColor = isAmbil ? '#15803d' : '#b91c1c';
+                else if (isTidak) { countTidakAmbil++; totalTidakAmbilUang += it.danaDiserahkanNum; }
+                if (!groupKet[ketLabel]) groupKet[ketLabel] = { count: 0, totalSerah: 0, isTidak };
+                groupKet[ketLabel].count++;
+                groupKet[ketLabel].totalSerah += it.danaDiserahkanNum;
+                const ketColor = isTidak ? '#b91c1c' : (isAmbil ? '#15803d' : '#64748b');
+                const ketBg = isTidak ? '#fee2e2' : (isAmbil ? '#dcfce7' : '#f1f5f9');
                 rows += `<tr>
                     <td style="text-align:center;">${i+1}</td>
                     <td style="font-weight:600;">${it.nama}</td>
@@ -60,67 +61,82 @@
                     <td style="text-align:right;">${formatRupiah(it.jumlahTotalNum)}</td>
                     <td style="text-align:right;color:#b91c1c;">${formatRupiah(it.potonganNum)}</td>
                     <td style="text-align:right;font-weight:bold;">${formatRupiah(it.danaDiserahkanNum)}</td>
-                    <td style="text-align:center;font-weight:bold;color:${ketColor};">${ketLabel}</td>
+                    <td style="text-align:center;font-weight:bold;color:${ketColor};background:${ketBg};">${ketLabel}</td>
                 </tr>`;
             });
-            const today = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
-            const html = `<!DOCTYPE html><html><head><title>Cetak Keseluruhan Tabungan Santri</title>
+            // Build per-keterangan rekap rows (sorted: AMBIL variants first, TIDAK AMBIL last)
+            const ketEntries = Object.entries(groupKet).sort((a,b) => {
+                if (a[1].isTidak !== b[1].isTidak) return a[1].isTidak ? 1 : -1;
+                return a[0].localeCompare(b[0]);
+            });
+            let ketRekapRows = '';
+            ketEntries.forEach(([label, g]) => {
+                const c = g.isTidak ? '#b91c1c' : '#15803d';
+                ketRekapRows += `<div class="rekap-row"><span>Keterangan <b style="color:${c};">${label}</b> <small style="color:#64748b;">(${g.count} santri)</small></span><span style="color:${c};"><b>${formatRupiah(g.totalSerah)}</b></span></div>`;
+            });
+            const tgl = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
+            const kelasLabel = selected.join(', ');
+            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rekapitulasi Keseluruhan Tabungan Santri</title>
                 <style>
-                    body{font-family:Arial,sans-serif;padding:20px;color:#0f172a;}
-                    h2{color:#15803d;margin:0;}h4{margin:4px 0;color:#555;}
-                    .kop{text-align:center;margin-bottom:15px;border-bottom:3px double #15803d;padding-bottom:10px;}
-                    .meta{display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;color:#475569;}
-                    table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:15px;}
-                    th,td{border:1px solid #333;padding:6px 8px;}
-                    thead th{background:#15803d;color:#fff;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;}
+                    @page { size: A4; margin: 12mm; }
+                    *{box-sizing:border-box;}
+                    body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#0f172a;margin:0;padding:15px;background:#fff;font-size:12px;}
+                    .kop{text-align:center;margin-bottom:12px;border-bottom:3px double #15803d;padding-bottom:10px;}
+                    .kop h2{margin:0;color:#15803d;font-size:20px;letter-spacing:1px;}
+                    .kop h4{margin:4px 0 0;color:#15803d;font-weight:600;font-size:13px;}
+                    .kop p{margin:2px 0 0;color:#64748b;font-size:11px;}
+                    .meta{display:flex;justify-content:space-between;margin:10px 0;font-size:12px;color:#334155;}
+                    .meta b{color:#15803d;}
+                    table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11.5px;}
+                    thead th{background:#15803d;color:#fff;padding:8px 6px;border:1px solid #166534;text-align:center;font-weight:700;}
+                    tbody td{padding:6px;border:1px solid #cbd5e1;}
                     tbody tr:nth-child(even){background:#f8fafc;}
-                    tfoot td{background:#fef9c3;font-weight:bold;border-top:2px solid #15803d;}
-                    .rekap{margin-top:15px;border:2px solid #15803d;border-radius:6px;padding:12px 16px;background:#f0fdf4;}
-                    .rekap h3{margin:0 0 8px 0;color:#15803d;border-bottom:1px dashed #15803d;padding-bottom:5px;}
-                    .rekap-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px dotted #cbd5e1;}
+                    tfoot td{background:#fef9c3;border:1px solid #ca8a04;padding:8px 6px;font-weight:bold;color:#15803d;}
+                    .rekap{margin-top:16px;border:2px solid #15803d;border-radius:8px;padding:14px 16px;background:#f0fdf4;}
+                    .rekap h3{margin:0 0 8px;color:#15803d;font-size:14px;border-bottom:1px solid #bbf7d0;padding-bottom:4px;}
+                    .rekap-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px dashed #d1fae5;font-size:12.5px;}
                     .rekap-row:last-child{border-bottom:none;}
-                    .btn{position:fixed;top:10px;right:10px;padding:10px 18px;background:#15803d;color:#fff;border:none;border-radius:5px;font-weight:bold;cursor:pointer;}
-                    @media print{.btn{display:none;}@page{size:A4 landscape;margin:12mm;} tbody tr:nth-child(even){background:#f8fafc !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;} thead th, tfoot td, .rekap, .rekap h3{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+                    .footer-sign{margin-top:25px;display:flex;justify-content:space-around;font-size:12px;text-align:center;}
+                    @media print{ body{padding:0;} thead{display:table-header-group;} tfoot td{background:#fef9c3 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;} thead th{background:#15803d !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;} .rekap{background:#f0fdf4 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;} tbody tr td{-webkit-print-color-adjust:exact;print-color-adjust:exact;} }
                 </style></head><body>
-                <button class="btn" onclick="window.print()">Cetak</button>
                 <div class="kop">
                     <h2>REKAPITULASI KESELURUHAN TABUNGAN SANTRI</h2>
                     <h4>YAYASAN HUDA WAN NURUL QUR'ANI</h4>
+                    <p>Laporan Tabungan Santri</p>
                 </div>
                 <div class="meta">
-                    <span><b>Kelas Terpilih:</b> ${selected.join(', ')}</span>
-                    <span><b>Tanggal Cetak:</b> ${today}</span>
+                    <div>Kelas: <b>${kelasLabel}</b></div>
+                    <div>Tanggal Cetak: <b>${tgl}</b></div>
                 </div>
                 <table>
                     <thead><tr>
-                            <th style="width:4%">No</th>
-                            <th>Nama Siswa</th>
-                            <th style="width:10%">Kelas</th>
-                            <th style="width:14%">Jumlah Tabungan</th>
-                            <th style="width:12%">Potongan</th>
-                            <th style="width:15%">Total Penyerahan</th>
-                            <th style="width:11%">Ket. Ambil</th>
-                        </tr></thead>
-                        <tbody>${rows}</tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="3" style="text-align:right;">REKAP TOTAL KESELURUHAN</td>
-                                <td style="text-align:right;">${formatRupiah(totalTab)}</td>
-                                <td style="text-align:right;color:#b91c1c;">${formatRupiah(totalPot)}</td>
-                                <td style="text-align:right;color:#15803d;">${formatRupiah(totalSerah)}</td>
-                                <td style="text-align:center;">${countAmbil}/${countTidakAmbil}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                        <th style="width:32px;">No</th>
+                        <th>Nama Santri</th>
+                        <th style="width:60px;">Kelas</th>
+                        <th style="width:95px;">Jumlah Tabungan</th>
+                        <th style="width:80px;">Potongan</th>
+                        <th style="width:100px;">Total Penyerahan</th>
+                        <th style="width:90px;">Ket. Ambil</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                    <tfoot><tr>
+                        <td colspan="3" style="text-align:right;">REKAP TOTAL KESELURUHAN</td>
+                        <td style="text-align:right;">${formatRupiah(totalTab)}</td>
+                        <td style="text-align:right;color:#b91c1c;">${formatRupiah(totalPot)}</td>
+                        <td style="text-align:right;">${formatRupiah(totalSerah)}</td>
+                        <td style="text-align:center;">Ambil: ${countAmbil} / Tidak: ${countTidakAmbil}</td>
+                    </tr></tfoot>
+                </table>
                     <div class="rekap">
                         <h3><i>Rekapitulasi</i></h3>
                         <div class="rekap-row"><span>Jumlah Santri</span><span><b>${sorted.length} Orang</b></span></div>
                         <div class="rekap-row"><span>Total Jumlah Tabungan</span><span><b>${formatRupiah(totalTab)}</b></span></div>
                         <div class="rekap-row"><span>Total Potongan</span><span style="color:#b91c1c;"><b>${formatRupiah(totalPot)}</b></span></div>
-                        <div class="rekap-row"><span>Jumlah Santri <b>AMBIL</b></span><span style="color:#15803d;"><b>${countAmbil} Orang</b></span></div>
-                        <div class="rekap-row"><span>Jumlah Santri <b>TIDAK AMBIL</b></span><span style="color:#b91c1c;"><b>${countTidakAmbil} Orang</b></span></div>
                         <div class="rekap-row"><span>Total Penyerahan (Semua)</span><span><b>${formatRupiah(totalSerah)}</b></span></div>
-                        <div class="rekap-row" style="background:#fef9c3;padding:8px;border-radius:4px;margin-top:6px;"><span><b>DANA YANG DISIAPKAN UNTUK DIKEMBALIKAN<br><small style="font-weight:normal;">(Total Penyerahan Santri "AMBIL")</small></b></span><span style="color:#15803d;font-size:17px;"><b>${formatRupiah(totalSerahAmbil)}</b></span></div>
+                        <h3 style="margin-top:12px;"><i>Rincian per Keterangan (Jumlah Uang)</i></h3>
+                        ${ketRekapRows}
+                        <div class="rekap-row" style="background:#fee2e2;padding:8px;border-radius:4px;margin-top:6px;"><span><b style="color:#b91c1c;">TOTAL DANA SISWA TIDAK AMBIL</b><br><small style="font-weight:normal;color:#64748b;">(${countTidakAmbil} santri — uang tetap ditahan)</small></span><span style="color:#b91c1c;font-size:16px;"><b>${formatRupiah(totalTidakAmbilUang)}</b></span></div>
+                        <div class="rekap-row" style="background:#fef9c3;padding:10px;border-radius:4px;margin-top:6px;border:2px solid #15803d;"><span><b style="color:#15803d;">DANA YANG DISIAPKAN UNTUK DIKEMBALIKAN KE ORANG TUA</b><br><small style="font-weight:normal;color:#64748b;">(Total penyerahan santri dengan keterangan AMBIL — ${countAmbil} santri)</small></span><span style="color:#15803d;font-size:18px;"><b>${formatRupiah(totalSerahAmbil)}</b></span></div>
                     </div>
                 </div>
                 <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
